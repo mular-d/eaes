@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -26,6 +27,19 @@ type config struct {
 type application struct {
 	config config
 	db     *sql.DB
+}
+
+type Result struct {
+	ID        int
+	Name      string
+	Image     string
+	Chemistry int
+	Biology   int
+	Maths     int
+	Civic     int
+	English   int
+	Aptitude  int
+	Physics   int
 }
 
 func main() {
@@ -97,14 +111,14 @@ func connectDB(cfg config) (*sql.DB, error) {
 func (app *application) serve() error {
 	port := strconv.Itoa(app.config.port)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.resultHandler)
+	mux.HandleFunc("/result", app.resultHandler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", port),
 		Handler:      mux,
 		IdleTimeout:  time.Minute,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
 	}
 
 	log.Print("starting server")
@@ -117,5 +131,39 @@ func (app *application) serve() error {
 }
 
 func (app *application) resultHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Hello, World!")
+	id := r.URL.Query().Get("id")
+
+	if id == "" {
+		http.Error(w, "Missing id parameter", http.StatusBadRequest)
+		return
+	}
+
+	resultID, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "Invalid id parameter", http.StatusBadRequest)
+		return
+	}
+
+	row := app.db.QueryRow("SELECT * FROM results WHERE id = $1", resultID)
+
+	var result Result
+	err = row.Scan(&result.ID, &result.Name, &result.Image, &result.Chemistry, &result.Biology, &result.Maths, &result.Civic, &result.English, &result.Aptitude, &result.Physics)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Result not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.Write(jsonResult)
 }
