@@ -13,6 +13,7 @@ A simple web server to simulate the resource required to run the EAES API and re
 Before running the web server, make sure to seed the PostgreSQL database with sample data. You can use the provided `seed.go` file to insert random data into the `results` table.
 
 ```bash
+cd script
 go run seed.go
 ```
 
